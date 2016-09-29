@@ -19,7 +19,7 @@ static const uint8_t offsets[] = {0,0,0,0};
  *2)fixedcol         3)unkilcol
  *4)fixedunkilcol    5)outerbordercol
  *6)emptycol         */
-static const char *colors[] = {"#35586c","#333333","#7a8c5c","#ff6666","#cc9933","#0d131a","#000000"};
+static const char *colors[] = {"#5F8787","#222222","#aaaaaa","#666666","#c1c1c1","#222222","#222222"};
 /*
  * If you are using a composition manager enable the COMPTON flag in the Makefile
  * (By changing -DNCOMPTON to -DCOMPTON)
@@ -36,14 +36,16 @@ static const bool inverted_colors = true;
 /*0) Outer border size. If you put this negative it will be a square.
  *1) Full borderwidth    2) Magnet border size
  *3) Resize border size  */
-static const uint8_t borders[] = {3,5,5,4};
+static const uint8_t borders[] = {4,5,5,4};
 /* Windows that won't have a border.*/
 #define LOOK_INTO "WM_NAME"
 static const char *ignore_names[] = {"bar", "xclock"};
 ///--Menus and Programs---///
-static const char *menucmd[]   = { "/usr/bin/gmrun", NULL };
-static const char *gmrun[]     = { "/usr/bin/gmrun",NULL};
+static const char *menucmd[]   = { "interrobang", NULL };
+static const char *gmrun[]     = { "interrobang",NULL};
 static const char *terminal[]  = { "urxvt", NULL };
+static const char *xlock[]     = { "xlock", NULL };
+static const char *killapp[]   = { "killapp", NULL };
 static const char *click1[]    = { "xdotool","click", "1", NULL };
 static const char *click2[]    = { "xdotool","click", "2", NULL };
 static const char *click3[]    = { "xdotool","click", "3", NULL };
@@ -68,7 +70,7 @@ static void halfandcentered(const Arg *arg)
  * KeyRelease event, serial 40, synthetic NO, window 0x1e00001,
  *  root 0x98, subw 0x0, time 211120530, (128,73), root:(855,214),
  *  state 0x10, keycode 171 (keysym 0x1008ff17, XF86AudioNext), same_screen YES,
- *  XLookupString gives 0 bytes: 
+ *  XLookupString gives 0 bytes:
  *  XFilterEvent returns: False
  *
  *  The keycode here is keysym 0x1008ff17, so use  0x1008ff17
@@ -94,8 +96,12 @@ static key keys[] = {
     // Focus to next/previous window
     {  MOD ,              XK_Tab,        focusnext,         {.i=TWOBWM_FOCUS_NEXT}},
     {  MOD |SHIFT,        XK_Tab,        focusnext,         {.i=TWOBWM_FOCUS_PREVIOUS}},
+    {  MOD |ALT,          XK_l,          focusnext,         {.i=TWOBWM_FOCUS_NEXT}},
+    {  MOD |ALT,          XK_k,          focusnext,         {.i=TWOBWM_FOCUS_NEXT}},
+    {  MOD |ALT,          XK_h,          focusnext,         {.i=TWOBWM_FOCUS_PREVIOUS}},
+    {  MOD |ALT,          XK_j,          focusnext,         {.i=TWOBWM_FOCUS_PREVIOUS}},
     // Kill a window
-    {  MOD ,              XK_q,          deletewin,         {}},
+    //{  MOD ,              XK_x,          deletewin,         {}},
     // Resize a window
     {  MOD |SHIFT,        XK_k,          resizestep,        {.i=TWOBWM_RESIZE_UP}},
     {  MOD |SHIFT,        XK_j,          resizestep,        {.i=TWOBWM_RESIZE_DOWN}},
@@ -107,10 +113,10 @@ static key keys[] = {
     {  MOD |SHIFT|CONTROL,XK_l,          resizestep,        {.i=TWOBWM_RESIZE_RIGHT_SLOW}},
     {  MOD |SHIFT|CONTROL,XK_h,          resizestep,        {.i=TWOBWM_RESIZE_LEFT_SLOW}},
     // Move a window
-    {  MOD ,              XK_k,          movestep,          {.i=TWOBWM_MOVE_UP}},
-    {  MOD ,              XK_j,          movestep,          {.i=TWOBWM_MOVE_DOWN}},
-    {  MOD ,              XK_l,          movestep,          {.i=TWOBWM_MOVE_RIGHT}},
-    {  MOD ,              XK_h,          movestep,          {.i=TWOBWM_MOVE_LEFT}},
+    {  MOD,               XK_k,          movestep,          {.i=TWOBWM_MOVE_UP}},
+    {  MOD,               XK_j,          movestep,          {.i=TWOBWM_MOVE_DOWN}},
+    {  MOD,               XK_l,          movestep,          {.i=TWOBWM_MOVE_RIGHT}},
+    {  MOD,               XK_h,          movestep,          {.i=TWOBWM_MOVE_LEFT}},
     // Move a window slower
     {  MOD |CONTROL,      XK_k,          movestep,          {.i=TWOBWM_MOVE_UP_SLOW}},
     {  MOD |CONTROL,      XK_j,          movestep,          {.i=TWOBWM_MOVE_DOWN_SLOW}},
@@ -135,7 +141,7 @@ static key keys[] = {
     {  MOD ,              XK_Home,       resizestep_aspect, {.i=TWOBWM_RESIZE_KEEP_ASPECT_GROW}},
     {  MOD ,              XK_End,        resizestep_aspect, {.i=TWOBWM_RESIZE_KEEP_ASPECT_SHRINK}},
     // Full screen window without borders
-    {  MOD ,              XK_x,         maximize,          {.i=TWOBWM_FULLSCREEN}},
+    {  MOD ,              XK_f,          maximize,          {.i=TWOBWM_FULLSCREEN}},
     //Full screen window without borders overiding offsets
     {  MOD |SHIFT ,       XK_x,          maximize,          {.i=TWOBWM_FULLSCREEN_OVERRIDE_OFFSETS}},
     // Maximize vertically
@@ -177,7 +183,7 @@ static key keys[] = {
     // Make the window appear always on top
     {  MOD,               XK_t,          always_on_top,     {}},
     // Make the window stay on all workspaces
-    {  MOD ,              XK_f,          fix,               {}},
+    {  MOD |SHIFT ,       XK_f,          fix,               {}},
     // Move the cursor
     {  MOD ,              XK_Up,         cursor_move,       {.i=TWOBWM_CURSOR_UP_SLOW}},
     {  MOD ,              XK_Down,       cursor_move,       {.i=TWOBWM_CURSOR_DOWN_SLOW}},
@@ -192,6 +198,8 @@ static key keys[] = {
     {  MOD ,              XK_Return,     start,             {.com = terminal}},
     {  MOD ,              XK_w,          start,             {.com = menucmd}},
     {  MOD |SHIFT,        XK_w,          start,             {.com = gmrun}},
+    {  MOD ,              XK_Escape,     start,             {.com = xlock}},
+    {  MOD ,              XK_x,     start,             {.com = killapp}},
     // Exit or restart 2bwm
     {  MOD |CONTROL,      XK_q,          twobwm_exit,       {.i=0}},
     {  MOD |CONTROL,      XK_r,          twobwm_restart,    {.i=0}},
@@ -199,7 +207,7 @@ static key keys[] = {
     // Fake clicks using xdotool
     {  MOD |CONTROL,      XK_Up,         start,             {.com = click1}},
     {  MOD |CONTROL,      XK_Down,       start,             {.com = click2}},
-	{  MOD |CONTROL,      XK_Right,      start,             {.com = click3}},
+    {  MOD |CONTROL,      XK_Right,      start,             {.com = click3}},
 /* example
     {  0x000000,          0x1008ff13, start,             {.com = vol_up}},
     {  0x000000,          0x1008ff11,  start,             {.com = vol_down}},
