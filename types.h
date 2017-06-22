@@ -20,6 +20,7 @@ typedef struct {
 	unsigned int mask, button;
 	void (*func)(const Arg *);
 	const Arg arg;
+	const bool root_only;
 } Button;
 struct sizepos {
 	int16_t x, y;
@@ -47,4 +48,6 @@ struct conf {
 	int8_t borderwidth;             // Do we draw borders for non-focused window? If so, how large?
 	int8_t outer_border;            // The size of the outer border
 	uint32_t focuscol,unfocuscol,fixedcol,unkillcol,empty_col,fixed_unkil_col,outer_border_col;
+	bool inverted_colors;
+	bool enable_compton;
 } conf;

@@ -25,6 +25,7 @@
 #include <xcb/xcb_keysyms.h>
 #include <xcb/xcb_icccm.h>
 #include <xcb/xcb_ewmh.h>
+#include <xcb/xcb_xrm.h>
 #include <X11/keysym.h>
 #include "list.h"
 #include "definitions.h"
@@ -55,6 +56,7 @@ xcb_atom_t ATOM[NB_ATOMS];
 ///---Functions prototypes---///
 static void run(void);
 static bool setup(int);
+static void install_sig_handlers(void);
 static void start(const Arg *);
 static void mousemotion(const Arg *);
 static void cursor_move(const Arg *);
@@ -210,12 +212,6 @@ void
 twobwm_exit()
 {
 	exit(EXIT_SUCCESS);
-}
-
-void
-sigcatch(const int sig)
-{
-	sigcode = sig;
 }
 
 void
@@ -464,11 +460,11 @@ changeworkspace_helper(const uint32_t ws)
 	struct client *client;
 	struct item *item;
 
-	xcb_ewmh_set_current_desktop(ewmh, 0, ws);
 
 	if (ws == curws)
 		return;
 
+	xcb_ewmh_set_current_desktop(ewmh, 0, ws);
 	for (item=wslist[curws]; item != NULL; item = item->next) {
 		/* Go through list of current ws.
 		 * Unmap everything that isn't fixed. */
@@ -896,7 +892,8 @@ setupwin(xcb_window_t win)
 		for (i = 0; i < win_type.atoms_len; i++) {
 			a = win_type.atoms[i];
 			if (a == ewmh->_NET_WM_WINDOW_TYPE_TOOLBAR || a
-					== ewmh->_NET_WM_WINDOW_TYPE_DOCK ) {
+					== ewmh->_NET_WM_WINDOW_TYPE_DOCK || a
+					== ewmh->_NET_WM_WINDOW_TYPE_DESKTOP ) {
 				xcb_ewmh_get_atoms_reply_wipe(&win_type);
 				xcb_map_window(conn,win);
 				return NULL;
@@ -1020,8 +1017,8 @@ grabkeys(void)
 		for (m=0; m<LENGTH(modifiers); m++)
 			xcb_grab_key(conn, 1, screen->root, keys[i].mod
 					| modifiers[m], keycode[k],
-					XCB_GRAB_MODE_ASYNC,
-					XCB_GRAB_MODE_ASYNC
+					XCB_GRAB_MODE_ASYNC,//pointer mode
+					XCB_GRAB_MODE_ASYNC //keyboard mode
 			);
 	free(keycode); // allocated in xcb_get_keycodes()
 	}
@@ -1047,7 +1044,7 @@ setup_keyboard(void)
 
 	numlock = xcb_get_keycodes(XK_Num_Lock);
 
-	for (i=0; i<8; i++) {
+	for (i=4; i<8; i++) {
 		for (j=0; j<reply->keycodes_per_modifier; j++) {
 			xcb_keycode_t keycode = modmap[i
 				* reply->keycodes_per_modifier + j];
@@ -1898,7 +1895,7 @@ setborders(struct client *client,const bool isitfocused)
 {
 	uint32_t values[1];  /* this is the color maintainer */
 	uint16_t half = 0;
-	bool inv = inverted_colors;
+	bool inv = conf.inverted_colors;
 
 	if (client->maxed || client->ignore_borders)
 		return;
@@ -2478,10 +2475,13 @@ handle_keypress(xcb_generic_event_t *e)
 	xcb_key_press_event_t *ev       = (xcb_key_press_event_t *)e;
 	xcb_keysym_t           keysym   = xcb_get_keysym(ev->detail);
 
-	for (unsigned int i=0; i<LENGTH(keys); i++)
+	for (unsigned int i=0; i<LENGTH(keys); i++) {
 		if (keysym == keys[i].keysym && CLEANMASK(keys[i].mod)
-				== CLEANMASK(ev->state) && keys[i].func)
+				== CLEANMASK(ev->state) && keys[i].func) {
 			keys[i].func(&keys[i].arg);
+			break;
+		}
+	}
 }
 
 /* Helper function to configure a window. */
@@ -2644,15 +2644,18 @@ create_back_win(void)
 			values
 	);
 
-#ifndef COMPTON
-	values[0] = 1;
-	xcb_change_window_attributes(conn, temp_win.id,
-			XCB_BACK_PIXMAP_PARENT_RELATIVE, values);
-#else
-	values[0] = conf.unfocuscol;
-	xcb_change_window_attributes(conn, temp_win.id,
-			XCB_CW_BACK_PIXEL, values);
-#endif
+	if (conf.enable_compton)
+	{
+		values[0] = 1;
+		xcb_change_window_attributes(conn, temp_win.id,
+				XCB_BACK_PIXMAP_PARENT_RELATIVE, values);
+	}
+	else
+	{
+		values[0] = conf.unfocuscol;
+		xcb_change_window_attributes(conn, temp_win.id,
+				XCB_CW_BACK_PIXEL, values);
+	}
 
 	temp_win.x              = focuswin->x;
 	temp_win.y              = focuswin->y;
@@ -2793,8 +2796,13 @@ buttonpress(xcb_generic_event_t *ev)
 				== CLEANMASK(e->state)){
 			if ((focuswin==NULL) && buttons[i].func == mousemotion)
 				return;
-
-			buttons[i].func(&(buttons[i].arg));
+			if (buttons[i].root_only) {
+				if (e->event == e->root && e->child == 0)
+					buttons[i].func(&(buttons[i].arg));
+			}
+			else {
+				buttons[i].func(&(buttons[i].arg));
+			}
 		}
 }
 
@@ -2973,6 +2981,10 @@ run(void)
 			free(ev);
 		}
 	}
+	if (sigcode == SIGHUP) {
+		sigcode = 0;
+		twobwm_restart();
+	}
 }
 
 /* Get a defined atom from the X server. */
@@ -3009,15 +3021,17 @@ grabbuttons(struct client *c)
 	};
 
 	for (unsigned int b=0; b<LENGTH(buttons); b++)
-		for (unsigned int m=0; m<LENGTH(modifiers); m++)
-			xcb_grab_button(conn, 1, c->id,
-					XCB_EVENT_MASK_BUTTON_PRESS,
-					XCB_GRAB_MODE_ASYNC,
-					XCB_GRAB_MODE_ASYNC,
-					screen->root, XCB_NONE,
-					buttons[b].button,
-					buttons[b].mask|modifiers[m]
-			);
+		if (!buttons[b].root_only) {
+			for (unsigned int m=0; m<LENGTH(modifiers); m++)
+				xcb_grab_button(conn, 1, c->id,
+						XCB_EVENT_MASK_BUTTON_PRESS,
+						XCB_GRAB_MODE_ASYNC,
+						XCB_GRAB_MODE_ASYNC,
+						screen->root, XCB_NONE,
+						buttons[b].button,
+						buttons[b].mask|modifiers[m]
+				);
+		}
 }
 
 void
@@ -3048,20 +3062,9 @@ setup(int scrno)
 	if (!screen)
 		return false;
 
-	xcb_window_t cwin = xcb_generate_id(conn);
-
-	xcb_create_window(conn, XCB_COPY_FROM_PARENT, cwin, screen->root, 0, 0,
-			screen->width_in_pixels, screen->height_in_pixels, 0,
-			XCB_WINDOW_CLASS_INPUT_OUTPUT,
-			XCB_COPY_FROM_PARENT,XCB_CW_EVENT_MASK,
-			event_mask_pointer
-	);
-
 	ewmh_init();
-	xcb_ewmh_set_wm_pid(ewmh, cwin, getpid());
-	xcb_ewmh_set_wm_name(ewmh, cwin, 4, "2bwm");
-	xcb_ewmh_set_supporting_wm_check(ewmh, cwin, cwin);
-	xcb_ewmh_set_supporting_wm_check(ewmh, screen->root, cwin);
+	xcb_ewmh_set_wm_pid(ewmh, screen->root, getpid());
+	xcb_ewmh_set_wm_name(ewmh, screen->root, 4, "2bwm");
 
 	xcb_atom_t net_atoms[] = {
 		ewmh->_NET_SUPPORTED,              ewmh->_NET_WM_DESKTOP,
@@ -3070,7 +3073,7 @@ setup(int scrno)
 		ewmh->_NET_WM_STATE,               ewmh->_NET_WM_NAME,
 		ewmh->_NET_SUPPORTING_WM_CHECK ,   ewmh->_NET_WM_STATE_HIDDEN,
 		ewmh->_NET_WM_ICON_NAME,           ewmh->_NET_WM_WINDOW_TYPE,
-		ewmh->_NET_WM_WINDOW_TYPE_DOCK,
+		ewmh->_NET_WM_WINDOW_TYPE_DOCK,    ewmh->_NET_WM_WINDOW_TYPE_DESKTOP,
 		ewmh->_NET_WM_WINDOW_TYPE_TOOLBAR, ewmh->_NET_WM_PID,
 		ewmh->_NET_CLIENT_LIST,            ewmh->_NET_CLIENT_LIST_STACKING,
 		ewmh->WM_PROTOCOLS,                ewmh->_NET_WM_STATE,
@@ -3079,15 +3082,57 @@ setup(int scrno)
 
 	xcb_ewmh_set_supported(ewmh, scrno, LENGTH(net_atoms), net_atoms);
 
-	conf.borderwidth     = borders[1];
-	conf.outer_border    = borders[0];
-	conf.focuscol        = getcolor(colors[0]);
-	conf.unfocuscol      = getcolor(colors[1]);
-	conf.fixedcol        = getcolor(colors[2]);
-	conf.unkillcol       = getcolor(colors[3]);
-	conf.outer_border_col= getcolor(colors[5]);
-	conf.fixed_unkil_col = getcolor(colors[4]);
-	conf.empty_col       = getcolor(colors[6]);
+	xcb_xrm_database_t* db = xcb_xrm_database_from_default(conn);
+
+	// Load the default config anyway.
+	conf.borderwidth			= borders[1];
+	conf.outer_border		 = borders[0];
+	conf.focuscol				 = getcolor(colors[0]);
+	conf.unfocuscol			 = getcolor(colors[1]);
+	conf.fixedcol				 = getcolor(colors[2]);
+	conf.unkillcol				= getcolor(colors[3]);
+	conf.outer_border_col = getcolor(colors[5]);
+	conf.fixed_unkil_col	= getcolor(colors[4]);
+	conf.empty_col				= getcolor(colors[6]);
+	conf.inverted_colors	= inverted_colors;
+	conf.enable_compton	 = false;
+
+	if (db != NULL)
+	{
+		char* value;
+
+		if (xcb_xrm_resource_get_string(db, "twobwm.border_width", NULL, &value) >= 0)
+			conf.borderwidth = atoi(value);
+
+		if (xcb_xrm_resource_get_string(db, "twobwm.outer_border", NULL, &value) >= 0)
+			conf.outer_border = atoi(value);
+
+		if (xcb_xrm_resource_get_string(db, "twobwm.focus_color", NULL, &value) >= 0)
+			conf.focuscol = getcolor(value);
+
+		if (xcb_xrm_resource_get_string(db, "twobwm.unfocus_color", NULL, &value) >= 0)
+			conf.unfocuscol = getcolor(value);
+
+		if (xcb_xrm_resource_get_string(db, "twobwm.fixed_color", NULL, &value) >= 0)
+			conf.fixedcol = getcolor(value);
+
+		if (xcb_xrm_resource_get_string(db, "twobwm.unkill_color", NULL, &value) >= 0)
+			conf.unkillcol = getcolor(value);
+
+		if (xcb_xrm_resource_get_string(db, "twobwm.outer_border_color", NULL, &value) >= 0)
+			conf.outer_border_col = getcolor(value);
+
+		if (xcb_xrm_resource_get_string(db, "twobwm.fixed_unkill_color", NULL, &value) >= 0)
+			conf.fixed_unkil_col = getcolor(value);
+
+		if (xcb_xrm_resource_get_string(db, "twobwm.inverted_colors", NULL, &value) >= 0)
+			conf.inverted_colors = strcmp(value, "true") == 0;
+
+		if (xcb_xrm_resource_get_string(db, "twobwm.enable_compton", NULL, &value) >= 0)
+			conf.enable_compton = strcmp(value, "true") == 0;
+	}
+
+	xcb_xrm_database_free(db);
 
 	for (i=0; i<NB_ATOMS; i++)
 		ATOM[i] = getatom(atomnames[i][0]);
@@ -3108,8 +3153,8 @@ setup(int scrno)
 	if (error)
 		return false;
 
-	xcb_ewmh_set_current_desktop(ewmh, 0, curws);
-	xcb_ewmh_set_number_of_desktops(ewmh, 0, WORKSPACES);
+	xcb_ewmh_set_current_desktop(ewmh, scrno, curws);
+	xcb_ewmh_set_number_of_desktops(ewmh, scrno, WORKSPACES);
 
 	grabkeys();
 	/* set events */
@@ -3144,21 +3189,41 @@ twobwm_restart(void)
 	execvp(TWOBWM_PATH, NULL);
 }
 
+void
+sigcatch(const int sig)
+{
+	sigcode = sig;
+}
+
+void
+install_sig_handlers(void)
+{
+	struct sigaction sa;
+	struct sigaction sa_chld;
+	sa.sa_handler = SIG_IGN;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_NOCLDSTOP;
+	//could not initialize signal handler
+	if (sigaction(SIGCHLD, &sa, NULL) == -1)
+		exit(-1);
+	sa.sa_handler = sigcatch;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_RESTART; /* Restart if interrupted by handler */
+	if ( sigaction(SIGINT, &sa, NULL) == -1
+		|| sigaction(SIGHUP, &sa, NULL) == -1
+		|| sigaction(SIGTERM, &sa, NULL) == -1)
+		exit(-1);
+}
+
 int
-main(void)
+main(int argc, char **argv)
 {
 	int scrno;
-
-	/* Install signal handlers. */
-	signal(SIGCHLD, SIG_IGN);
-	signal(SIGINT, sigcatch);
-	signal(SIGTERM, sigcatch);
+	install_sig_handlers();
 	atexit(cleanup);
-
 	if (!xcb_connection_has_error(conn = xcb_connect(NULL, &scrno)))
 		if (setup(scrno))
 			run();
-
 	/* the WM has stopped running, because sigcode is not 0 */
 	exit(sigcode);
 }

@@ -20,10 +20,6 @@ static const uint8_t offsets[] = {0,0,0,0};
  *4)fixedunkilcol    5)outerbordercol
  *6)emptycol         */
 static const char *colors[] = {"#5F8787","#222222","#aaaaaa","#666666","#c1c1c1","#222222","#222222"};
-/*
- * If you are using a composition manager enable the COMPTON flag in the Makefile
- * (By changing -DNCOMPTON to -DCOMPTON)
- */
 /* if this is set to true the inner border and outer borders colors will be swapped */
 static const bool inverted_colors = true;
 ///---Cursor---///
@@ -37,23 +33,14 @@ static const bool inverted_colors = true;
  *1) Full borderwidth    2) Magnet border size
  *3) Resize border size  */
 static const uint8_t borders[] = {4,5,5,4};
-/* Windows that won't have a border.*/
+/* Windows that won't have a border.
+ * It uses substring comparison with what is found in the WM_NAME
+ * attribute of the window. You can test this using `xprop WM_NAME`
+ */
 #define LOOK_INTO "WM_NAME"
 static const char *ignore_names[] = {"bar", "xclock"};
 ///--Menus and Programs---///
 static const char *menucmd[]   = { "interrobang", NULL };
-static const char *gmrun[]     = { "interrobang",NULL};
-static const char *terminal[]  = { "urxvt", NULL };
-static const char *xlock[]     = { "xlock", NULL };
-static const char *killapp[]   = { "killapp", NULL };
-static const char *click1[]    = { "xdotool","click", "1", NULL };
-static const char *click2[]    = { "xdotool","click", "2", NULL };
-static const char *click3[]    = { "xdotool","click", "3", NULL };
-/* Example
-static const char *vol_up[]    = { "amixer", "set", "Master", "unmute", "3%+", "-q", NULL };
-static const char *vol_down[]  = { "amixer", "set", "Master", "unmute", "3%-", "-q", NULL };
-static const char *vol_mute[]  = { "amixer", "set", "Master", "mute", "-q", NULL };
-*/
 ///--Custom foo---///
 static void halfandcentered(const Arg *arg)
 {
@@ -96,12 +83,8 @@ static key keys[] = {
     // Focus to next/previous window
     {  MOD ,              XK_Tab,        focusnext,         {.i=TWOBWM_FOCUS_NEXT}},
     {  MOD |SHIFT,        XK_Tab,        focusnext,         {.i=TWOBWM_FOCUS_PREVIOUS}},
-    {  MOD |ALT,          XK_l,          focusnext,         {.i=TWOBWM_FOCUS_NEXT}},
-    {  MOD |ALT,          XK_k,          focusnext,         {.i=TWOBWM_FOCUS_NEXT}},
-    {  MOD |ALT,          XK_h,          focusnext,         {.i=TWOBWM_FOCUS_PREVIOUS}},
-    {  MOD |ALT,          XK_j,          focusnext,         {.i=TWOBWM_FOCUS_PREVIOUS}},
     // Kill a window
-    //{  MOD ,              XK_x,          deletewin,         {}},
+    {  MOD ,              XK_x,          deletewin,         {}},
     // Resize a window
     {  MOD |SHIFT,        XK_k,          resizestep,        {.i=TWOBWM_RESIZE_UP}},
     {  MOD |SHIFT,        XK_j,          resizestep,        {.i=TWOBWM_RESIZE_DOWN}},
@@ -113,10 +96,10 @@ static key keys[] = {
     {  MOD |SHIFT|CONTROL,XK_l,          resizestep,        {.i=TWOBWM_RESIZE_RIGHT_SLOW}},
     {  MOD |SHIFT|CONTROL,XK_h,          resizestep,        {.i=TWOBWM_RESIZE_LEFT_SLOW}},
     // Move a window
-    {  MOD,               XK_k,          movestep,          {.i=TWOBWM_MOVE_UP}},
-    {  MOD,               XK_j,          movestep,          {.i=TWOBWM_MOVE_DOWN}},
-    {  MOD,               XK_l,          movestep,          {.i=TWOBWM_MOVE_RIGHT}},
-    {  MOD,               XK_h,          movestep,          {.i=TWOBWM_MOVE_LEFT}},
+    {  MOD ,              XK_k,          movestep,          {.i=TWOBWM_MOVE_UP}},
+    {  MOD ,              XK_j,          movestep,          {.i=TWOBWM_MOVE_DOWN}},
+    {  MOD ,              XK_l,          movestep,          {.i=TWOBWM_MOVE_RIGHT}},
+    {  MOD ,              XK_h,          movestep,          {.i=TWOBWM_MOVE_LEFT}},
     // Move a window slower
     {  MOD |CONTROL,      XK_k,          movestep,          {.i=TWOBWM_MOVE_UP_SLOW}},
     {  MOD |CONTROL,      XK_j,          movestep,          {.i=TWOBWM_MOVE_DOWN_SLOW}},
@@ -177,7 +160,7 @@ static key keys[] = {
     {  MOD |SHIFT ,       XK_v,          sendtonextworkspace,{}},
     {  MOD |SHIFT ,       XK_c,          sendtoprevworkspace,{}},
     // Iconify the window
-    {  MOD ,              XK_i,          hide,              {}},
+    //{  MOD ,              XK_i,          hide,              {}},
     // Make the window unkillable
     {  MOD ,              XK_a,          unkillable,        {}},
     // Make the window appear always on top
@@ -195,26 +178,11 @@ static key keys[] = {
     {  MOD |SHIFT,        XK_Right,      cursor_move,       {.i=TWOBWM_CURSOR_RIGHT}},
     {  MOD |SHIFT,        XK_Left,       cursor_move,       {.i=TWOBWM_CURSOR_LEFT}},
     // Start programs
-    {  MOD ,              XK_Return,     start,             {.com = terminal}},
     {  MOD ,              XK_w,          start,             {.com = menucmd}},
-    {  MOD |SHIFT,        XK_w,          start,             {.com = gmrun}},
-    {  MOD ,              XK_Escape,     start,             {.com = xlock}},
-    {  MOD ,              XK_x,     start,             {.com = killapp}},
     // Exit or restart 2bwm
     {  MOD |CONTROL,      XK_q,          twobwm_exit,       {.i=0}},
     {  MOD |CONTROL,      XK_r,          twobwm_restart,    {.i=0}},
     {  MOD ,              XK_space,      halfandcentered,   {.i=0}},
-    // Fake clicks using xdotool
-    {  MOD |CONTROL,      XK_Up,         start,             {.com = click1}},
-    {  MOD |CONTROL,      XK_Down,       start,             {.com = click2}},
-    {  MOD |CONTROL,      XK_Right,      start,             {.com = click3}},
-/* example
-    {  0x000000,          0x1008ff13, start,             {.com = vol_up}},
-    {  0x000000,          0x1008ff11,  start,             {.com = vol_down}},
-    {  0x000000,          0x1008ff15, start,             {.com = vol_mute}},
-*/
-
-
     // Change current workspace
        DESKTOPCHANGE(     XK_1,                             0)
        DESKTOPCHANGE(     XK_2,                             1)
@@ -227,12 +195,13 @@ static key keys[] = {
        DESKTOPCHANGE(     XK_9,                             8)
        DESKTOPCHANGE(     XK_0,                             9)
 };
+// the last argument makes it a root window only event
 static Button buttons[] = {
-    {  MOD        ,XCB_BUTTON_INDEX_1,     mousemotion,   {.i=TWOBWM_MOVE}},
-    {  MOD        ,XCB_BUTTON_INDEX_3,     mousemotion,   {.i=TWOBWM_RESIZE}},
-    {  MOD|CONTROL,XCB_BUTTON_INDEX_3,     start,         {.com = menucmd}},
-    {  MOD|SHIFT,  XCB_BUTTON_INDEX_1,     changeworkspace, {.i=0}},
-    {  MOD|SHIFT,  XCB_BUTTON_INDEX_3,     changeworkspace, {.i=1}},
-    {  MOD|ALT,    XCB_BUTTON_INDEX_1,     changescreen,    {.i=1}},
-    {  MOD|ALT,    XCB_BUTTON_INDEX_3,     changescreen,    {.i=0}}
+    {  MOD        ,XCB_BUTTON_INDEX_1,     mousemotion,   {.i=TWOBWM_MOVE}, false},
+    {  MOD        ,XCB_BUTTON_INDEX_3,     mousemotion,   {.i=TWOBWM_RESIZE}, false},
+    {  0          ,XCB_BUTTON_INDEX_3,     start,         {.com = menucmd}, true},
+    {  MOD|SHIFT,  XCB_BUTTON_INDEX_1,     changeworkspace, {.i=0}, false},
+    {  MOD|SHIFT,  XCB_BUTTON_INDEX_3,     changeworkspace, {.i=1}, false},
+    {  MOD|ALT,    XCB_BUTTON_INDEX_1,     changescreen,    {.i=1}, false},
+    {  MOD|ALT,    XCB_BUTTON_INDEX_3,     changescreen,    {.i=0}, false}
 };
