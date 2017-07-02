@@ -13,7 +13,7 @@ static const float    resize_keep_aspect_ratio= 1.03;
 ///---Offsets---///
 /*0)offsetx          1)offsety
  *2)maxwidth         3)maxheight */
-static const uint8_t offsets[] = {0,0,0,0};
+static const uint8_t offsets[] = {20,20,40,40};
 ///---Colors---///
 /*0)focuscol         1)unfocuscol
  *2)fixedcol         3)unkilcol
@@ -41,6 +41,7 @@ static const uint8_t borders[] = {4,5,5,4};
 static const char *ignore_names[] = {"bar", "xclock"};
 ///--Menus and Programs---///
 static const char *menucmd[]   = { "interrobang", NULL };
+static const char *terminal[]  = { "urxvt", NULL };
 ///--Custom foo---///
 static void halfandcentered(const Arg *arg)
 {
@@ -83,6 +84,10 @@ static key keys[] = {
     // Focus to next/previous window
     {  MOD ,              XK_Tab,        focusnext,         {.i=TWOBWM_FOCUS_NEXT}},
     {  MOD |SHIFT,        XK_Tab,        focusnext,         {.i=TWOBWM_FOCUS_PREVIOUS}},
+    {  MOD |ALT,          XK_l,          focusnext,         {.i=TWOBWM_FOCUS_NEXT}},
+    {  MOD |ALT,          XK_k,          focusnext,         {.i=TWOBWM_FOCUS_NEXT}},
+    {  MOD |ALT,          XK_h,          focusnext,         {.i=TWOBWM_FOCUS_PREVIOUS}},
+    {  MOD |ALT,          XK_j,          focusnext,         {.i=TWOBWM_FOCUS_PREVIOUS}},
     // Kill a window
     {  MOD ,              XK_x,          deletewin,         {}},
     // Resize a window
@@ -179,6 +184,7 @@ static key keys[] = {
     {  MOD |SHIFT,        XK_Left,       cursor_move,       {.i=TWOBWM_CURSOR_LEFT}},
     // Start programs
     {  MOD ,              XK_w,          start,             {.com = menucmd}},
+    {  MOD ,              XK_Return,     start,             {.com = terminal}},
     // Exit or restart 2bwm
     {  MOD |CONTROL,      XK_q,          twobwm_exit,       {.i=0}},
     {  MOD |CONTROL,      XK_r,          twobwm_restart,    {.i=0}},
